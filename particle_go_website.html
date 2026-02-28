@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Particle Go — Emergent Universe Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #070710;
+    --surface:   #0e0e1c;
+    --border:    #1e1e38;
+    --text:      #c8c8ff;
+    --text-sub:  #5a5a8a;
+    --text-dim:  #2e2e52;
+    --accent:    #5566ff;
+    --accent2:   #ff4466;
+    --green:     #44dd88;
+    --yellow:    #ffcc44;
+    --purple:    #aa44ff;
+    --glow:      rgba(85, 102, 255, 0.15);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    overflow-x: hidden;
+    min-height: 100vh;
+    cursor: crosshair;
+  }
+
+  /* ── Canvas background ─────────────────────────────────────── */
+  #canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    opacity: 0.55;
+  }
+
+  /* ── Grain overlay ─────────────────────────────────────────── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    background-size: 200px;
+    pointer-events: none;
+    opacity: 0.6;
+  }
+
+  /* ── Vignette ──────────────────────────────────────────────── */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 1;
+    background: radial-gradient(ellipse 80% 70% at 50% 50%, transparent 40%, rgba(7,7,16,0.85) 100%);
+    pointer-events: none;
+  }
+
+  /* ── Wrapper ───────────────────────────────────────────────── */
+  .wrap {
+    position: relative;
+    z-index: 10;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 32px;
+  }
+
+  /* ── Nav ───────────────────────────────────────────────────── */
+  nav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    padding: 20px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid transparent;
+    transition: border-color 0.4s, background 0.4s, backdrop-filter 0.4s;
+  }
+  nav.scrolled {
+    background: rgba(7,7,16,0.85);
+    backdrop-filter: blur(16px);
+    border-color: var(--border);
+  }
+  .nav-logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text);
+    text-decoration: none;
+  }
+  .nav-logo span { color: var(--accent); }
+  .nav-badge {
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    color: var(--text-sub);
+    border: 1px solid var(--border);
+    padding: 4px 10px;
+    border-radius: 99px;
+  }
+
+  /* ── Hero ──────────────────────────────────────────────────── */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 120px 0 80px;
+  }
+
+  .hero-eyebrow {
+    font-size: 0.7rem;
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 28px;
+    opacity: 0;
+    animation: fadeUp 0.8s ease forwards 0.2s;
+  }
+
+  .hero-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(3.5rem, 10vw, 7.5rem);
+    line-height: 0.92;
+    letter-spacing: -0.02em;
+    margin-bottom: 32px;
+    opacity: 0;
+    animation: fadeUp 0.9s ease forwards 0.35s;
+  }
+
+  .hero-title .line1 { display: block; color: var(--text); }
+  .hero-title .line2 {
+    display: block;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--purple) 50%, var(--accent2) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .hero-sub {
+    max-width: 520px;
+    font-size: 0.9rem;
+    line-height: 1.9;
+    color: var(--text-sub);
+    margin-bottom: 52px;
+    opacity: 0;
+    animation: fadeUp 0.9s ease forwards 0.5s;
+  }
+
+  .hero-cta {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    opacity: 0;
+    animation: fadeUp 0.9s ease forwards 0.65s;
+  }
+
+  .btn-download {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--accent);
+    color: #fff;
+    font-family: 'Space Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 18px 38px;
+    border-radius: 6px;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: 0 0 40px rgba(85,102,255,0.4), 0 0 80px rgba(85,102,255,0.15);
+  }
+  .btn-download::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .btn-download:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 0 60px rgba(85,102,255,0.6), 0 0 120px rgba(85,102,255,0.2);
+  }
+  .btn-download:active { transform: translateY(0); }
+
+  .btn-icon {
+    width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  .cta-note {
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  .cta-note span { color: var(--text-sub); }
+
+  /* ── Particle type pills ───────────────────────────────────── */
+  .type-pills {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 60px;
+    opacity: 0;
+    animation: fadeUp 0.9s ease forwards 0.45s;
+  }
+  .pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.65rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-sub);
+    border: 1px solid var(--border);
+    padding: 5px 12px;
+    border-radius: 99px;
+    background: rgba(14,14,28,0.6);
+  }
+  .pill-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ── Section ───────────────────────────────────────────────── */
+  section {
+    padding: 100px 0;
+  }
+
+  .section-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+
+  /* ── Feature grid ──────────────────────────────────────────── */
+  .features-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-top: 48px;
+  }
+  .feature {
+    padding: 32px 28px;
+    background: var(--surface);
+    transition: background 0.3s;
+  }
+  .feature:hover { background: #12122a; }
+  .feature-icon {
+    font-size: 1.6rem;
+    margin-bottom: 16px;
+    display: block;
+  }
+  .feature-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    color: var(--text);
+    margin-bottom: 8px;
+    letter-spacing: 0.02em;
+  }
+  .feature-desc {
+    font-size: 0.75rem;
+    line-height: 1.8;
+    color: var(--text-sub);
+  }
+
+  /* ── Matrix vis ────────────────────────────────────────────── */
+  .matrix-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 64px;
+    align-items: center;
+  }
+  .matrix-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 2.2rem;
+    line-height: 1.1;
+    color: var(--text);
+    margin-bottom: 20px;
+  }
+  .matrix-title em {
+    font-style: normal;
+    color: var(--accent);
+  }
+  .matrix-desc {
+    font-size: 0.8rem;
+    line-height: 1.9;
+    color: var(--text-sub);
+    margin-bottom: 28px;
+  }
+  .matrix-vis {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 5px;
+    padding: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    font-size: 0.6rem;
+  }
+  .matrix-cell {
+    aspect-ratio: 1;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #000;
+    font-weight: 700;
+    font-size: 0.55rem;
+    letter-spacing: 0;
+    transition: transform 0.2s;
+    cursor: default;
+  }
+  .matrix-cell:hover { transform: scale(1.15); z-index: 1; }
+  .matrix-label {
+    font-size: 0.55rem;
+    color: var(--text-sub);
+    text-align: center;
+    letter-spacing: 0.05em;
+    margin-top: 10px;
+  }
+
+  /* ── Stats row ─────────────────────────────────────────────── */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-top: 80px;
+  }
+  .stat {
+    padding: 32px 24px;
+    background: var(--surface);
+    text-align: center;
+  }
+  .stat-num {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 2.2rem;
+    color: var(--text);
+    display: block;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .stat-num span { color: var(--accent); }
+  .stat-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-sub);
+  }
+
+  /* ── Physics section ───────────────────────────────────────── */
+  .physics-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: 32px;
+  }
+  .physics-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.78rem;
+    gap: 20px;
+    transition: background 0.2s, border-color 0.2s;
+  }
+  .physics-item:hover { background: #12122a; border-color: var(--accent); }
+  .physics-name { color: var(--text); letter-spacing: 0.04em; }
+  .physics-bar-wrap { flex: 1; height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; }
+  .physics-bar { height: 100%; border-radius: 2px; transition: width 0.6s ease; }
+  .physics-val {
+    font-size: 0.7rem;
+    color: var(--accent);
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    min-width: 48px;
+    text-align: right;
+  }
+
+  /* ── Download CTA section ──────────────────────────────────── */
+  .cta-section {
+    text-align: center;
+    padding: 120px 0;
+  }
+  .cta-big-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(2.5rem, 6vw, 5rem);
+    line-height: 1;
+    margin-bottom: 24px;
+    letter-spacing: -0.02em;
+  }
+  .cta-big-desc {
+    font-size: 0.85rem;
+    color: var(--text-sub);
+    line-height: 1.9;
+    max-width: 440px;
+    margin: 0 auto 48px;
+  }
+  .os-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    color: var(--text-sub);
+    border: 1px solid var(--border);
+    padding: 8px 18px;
+    border-radius: 99px;
+    margin-top: 16px;
+  }
+  .os-badge svg { opacity: 0.6; }
+
+  /* ── Footer ────────────────────────────────────────────────── */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 40px 0;
+    text-align: center;
+  }
+  .footer-text {
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+  .footer-text span { color: var(--text-sub); }
+
+  /* ── Divider line ──────────────────────────────────────────── */
+  .divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0;
+  }
+
+  .btn-source {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: transparent;
+    color: var(--text-sub);
+    font-family: 'Space Mono', monospace;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 14px 32px;
+    border-radius: 6px;
+    text-decoration: none;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    margin-top: 14px;
+    transition: transform 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
+  }
+  .btn-source:hover {
+    transform: translateY(-2px);
+    border-color: var(--text-sub);
+    color: var(--text);
+    box-shadow: 0 0 20px rgba(200,200,255,0.08);
+  }
+  .btn-source:active { transform: translateY(0); }
+
+  /* ── Text glow / transparent outline (mirrors particle glow) ── */
+  .hero-title .line1 {
+    text-shadow:
+      0 0 20px rgba(200, 200, 255, 0.25),
+      0 0 40px rgba(200, 200, 255, 0.12),
+      0 0 1px rgba(200, 200, 255, 0.5);
+  }
+
+  .section-label {
+    text-shadow:
+      0 0 12px rgba(85, 102, 255, 0.5),
+      0 0 24px rgba(85, 102, 255, 0.25);
+  }
+
+  .hero-eyebrow {
+    text-shadow:
+      0 0 12px rgba(85, 102, 255, 0.5),
+      0 0 24px rgba(85, 102, 255, 0.25);
+  }
+
+  .matrix-title {
+    text-shadow:
+      0 0 18px rgba(200, 200, 255, 0.2),
+      0 0 35px rgba(200, 200, 255, 0.1);
+  }
+
+  .matrix-title em {
+    text-shadow:
+      0 0 18px rgba(85, 102, 255, 0.5),
+      0 0 35px rgba(85, 102, 255, 0.25);
+  }
+
+  .feature-title {
+    text-shadow:
+      0 0 12px rgba(200, 200, 255, 0.2),
+      0 0 1px rgba(200, 200, 255, 0.4);
+  }
+
+  .stat-num {
+    text-shadow:
+      0 0 16px rgba(200, 200, 255, 0.2),
+      0 0 32px rgba(200, 200, 255, 0.1);
+  }
+
+  .cta-big-title {
+    text-shadow:
+      0 0 20px rgba(200, 200, 255, 0.2),
+      0 0 40px rgba(200, 200, 255, 0.1);
+  }
+
+  .nav-logo {
+    text-shadow:
+      0 0 10px rgba(200, 200, 255, 0.2),
+      0 0 1px rgba(200, 200, 255, 0.3);
+  }
+
+  .nav-logo span {
+    text-shadow:
+      0 0 10px rgba(85, 102, 255, 0.6),
+      0 0 20px rgba(85, 102, 255, 0.3);
+  }
+
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 40px rgba(85,102,255,0.4), 0 0 80px rgba(85,102,255,0.15); }
+    50%       { box-shadow: 0 0 60px rgba(85,102,255,0.6), 0 0 120px rgba(85,102,255,0.25); }
+  }
+  .btn-download { animation: pulse-glow 3s ease-in-out infinite; }
+
+  .reveal {
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.7s ease, transform 0.7s ease;
+  }
+  .reveal.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  @media (max-width: 720px) {
+    .features-grid { grid-template-columns: 1fr; }
+    .matrix-section { grid-template-columns: 1fr; gap: 40px; }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    nav { padding: 16px 20px; }
+    .wrap { padding: 0 20px; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<!-- NAV -->
+<nav id="nav">
+  <a class="nav-logo" href="#"><span>◈</span> Particle Go</a>
+  <span class="nav-badge">macOS Only</span>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="wrap">
+    <p class="hero-eyebrow">◈ Emergent Universe Simulator · macOS Only</p>
+    <h1 class="hero-title">
+      <span class="line1">Particle</span>
+      <span class="line2">Go</span>
+    </h1>
+
+    <div class="type-pills">
+      <span class="pill"><span class="pill-dot" style="background:#e63c3c"></span>Red</span>
+      <span class="pill"><span class="pill-dot" style="background:#3cd250"></span>Green</span>
+      <span class="pill"><span class="pill-dot" style="background:#3c82e6"></span>Blue</span>
+      <span class="pill"><span class="pill-dot" style="background:#e6d228"></span>Yellow</span>
+      <span class="pill"><span class="pill-dot" style="background:#b43cdc"></span>Purple</span>
+    </div>
+
+    <p class="hero-sub">
+      Watch life emerge from simple rules. Five particle species,
+      infinite possibilities. Tune attraction forces and witness
+      complex, self-organizing behavior unfold in real time.
+    </p>
+
+    <div class="hero-cta">
+      <a class="btn-download" href="https://drive.google.com/uc?export=download&id=1k9SuXzlX16INxD7RLqnJ_qiJl_40PfDZ">
+        <span class="btn-icon">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M9 2v10M5 8l4 4 4-4M2 14h14" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        Download for macOS
+      </a>
+      <span class="cta-note"><span>Free</span> · macOS 10.13+ · No install required</span>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- FEATURES -->
+<section>
+  <div class="wrap">
+    <p class="section-label reveal">What's inside</p>
+    <div class="features-grid reveal">
+      <div class="feature">
+        <span class="feature-icon">⚛</span>
+        <div class="feature-title">5 Particle Types</div>
+        <div class="feature-desc">Red, green, blue, yellow & purple species each follow their own attraction rules across a toroidal world.</div>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">⟁</span>
+        <div class="feature-title">Attraction Matrix</div>
+        <div class="feature-desc">25 tunable force sliders define who attracts, repels, or ignores whom. Randomize for instant chaos.</div>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">⚙</span>
+        <div class="feature-title">Physics Controls</div>
+        <div class="feature-desc">Dial in friction, force scale, max distance, min distance and speed cap from the live settings panel — a hyper advanced control system built for precision tuning.</div>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">💾</span>
+        <div class="feature-title">Save System</div>
+        <div class="feature-desc">Named save files with autosave, rename, load & delete. All physics parameters persist between sessions.</div>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">🎨</span>
+        <div class="feature-title">Customization</div>
+        <div class="feature-desc">Rename species, edit RGB colors, tweak world size. Dark & light themes. Every detail is yours to own.</div>
+      </div>
+      <div class="feature">
+        <span class="feature-icon">◉</span>
+        <div class="feature-title">Emergent Behavior</div>
+        <div class="feature-desc">Simple local rules create flocking, clustering, spirals, and complex living structures — no scripting required.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- MATRIX VIS -->
+<section>
+  <div class="wrap">
+    <div class="matrix-section">
+      <div class="reveal">
+        <p class="section-label">The attraction matrix</p>
+        <h2 class="matrix-title">Rules that<br>build <em>worlds</em></h2>
+        <p class="matrix-desc">
+          Each cell in the 5×5 matrix defines the force between two species.
+          Positive values attract, negative repel. Tiny changes cascade
+          into entirely different emergent universes.
+        </p>
+        <div class="physics-list">
+          <div class="physics-item">
+            <span class="physics-name">Friction</span>
+            <div class="physics-bar-wrap"><div class="physics-bar" style="width:85%;background:linear-gradient(90deg,#5566ff,#aa44ff)"></div></div>
+            <span class="physics-val">0.850</span>
+          </div>
+          <div class="physics-item">
+            <span class="physics-name">Force Scale</span>
+            <div class="physics-bar-wrap"><div class="physics-bar" style="width:42%;background:linear-gradient(90deg,#44dd88,#5566ff)"></div></div>
+            <span class="physics-val">0.420</span>
+          </div>
+          <div class="physics-item">
+            <span class="physics-name">Max Distance</span>
+            <div class="physics-bar-wrap"><div class="physics-bar" style="width:30%;background:linear-gradient(90deg,#ffcc44,#ff4466)"></div></div>
+            <span class="physics-val">120 px</span>
+          </div>
+          <div class="physics-item">
+            <span class="physics-name">Max Speed</span>
+            <div class="physics-bar-wrap"><div class="physics-bar" style="width:20%;background:linear-gradient(90deg,#aa44ff,#ff4466)"></div></div>
+            <span class="physics-val">4.0</span>
+          </div>
+        </div>
+      </div>
+      <div class="reveal" id="matrixVis">
+        <!-- Matrix cells generated by JS -->
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats reveal">
+      <div class="stat">
+        <span class="stat-num">25<span>×</span></span>
+        <span class="stat-label">Force Rules</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">1250</span>
+        <span class="stat-label">Max Particles</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">60<span>fps</span></span>
+        <span class="stat-label">Real-time sim</span>
+      </div>
+      <div class="stat">
+        <span class="stat-num">∞</span>
+        <span class="stat-label">Possibilities</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- FINAL CTA -->
+<section class="cta-section">
+  <div class="wrap">
+    <div class="reveal">
+      <h2 class="cta-big-title">
+        Start your<br>
+        <span style="background:linear-gradient(135deg,var(--accent),var(--purple),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">universe.</span>
+      </h2>
+      <p class="cta-big-desc">
+        Free. No account. No ads. Just particles
+        doing what particles do — something
+        unexpectedly beautiful.
+      </p>
+      <a class="btn-download" href="https://drive.google.com/uc?export=download&id=1k9SuXzlX16INxD7RLqnJ_qiJl_40PfDZ">
+        <span class="btn-icon">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M9 2v10M5 8l4 4 4-4M2 14h14" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        Download for macOS — Free (macOS Only)
+      </a>
+      <br>
+      <a class="btn-source" href="https://drive.google.com/uc?export=download&id=12tHVZwCb0Jj5okb2O4wnxJON5jYF6bUQ" target="_blank">
+        <span class="btn-icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M4 2L1 5l3 3M12 2l3 3-3 3M9.5 1l-3 14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        Download Source Code
+      </a>
+      <br>
+      <span class="os-badge">
+        <svg width="14" height="14" viewBox="0 0 814 1000" fill="currentColor"><path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-57.8-155.5-127.4C46 790.7 0 663 0 541.8c0-207.3 135.3-317 269.1-317 sediment 0 99.2 47.1 134.9 47.1 34 0 138.5-49.6 174.5-49.6zm-167.4-147.2c24.1-28.7 41.1-68.5 41.1-108.3 0-5.8-.5-11.7-1.5-16.8-39.1 1.5-85.5 25.9-113.8 57.4-22.1 24.9-42.5 64.8-42.5 105.3 0 6.4.9 12.8 1.4 14.9 2.3.4 6.1.9 9.9.9 35.3 0 79.8-23.2 105.4-53.4z"/></svg>
+        macOS 10.13 Ventura and later
+      </span>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="wrap">
+    <p class="footer-text">
+      Particle Go · Built with <span>Python + Pygame</span> · <span>◈</span> Open Source · macOS Only
+    </p>
+  </div>
+</footer>
+
+<script>
+// ── Particle canvas background ──────────────────────────────────
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+const COLORS = ['#e63c3c','#3cd250','#3c82e6','#e6d228','#b43cdc'];
+const TYPES  = ['red','green','blue','yellow','purple'];
+
+let W, H, particles = [];
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', () => { resize(); initParticles(); });
+
+function initParticles() {
+  particles = [];
+  const N = Math.min(220, Math.floor(W * H / 8000));
+  for (let i = 0; i < N; i++) {
+    const t = Math.floor(Math.random() * 5);
+    particles.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      vx: (Math.random() - 0.5) * 0.8,
+      vy: (Math.random() - 0.5) * 0.8,
+      type: t,
+      r: Math.random() * 2.5 + 1.5
+    });
+  }
+}
+initParticles();
+
+// Simple attraction matrix for visual demo
+const att = {};
+TYPES.forEach(rt => {
+  att[rt] = {};
+  TYPES.forEach(ct => { att[rt][ct] = (Math.random() * 2 - 1) * 0.5; });
+});
+
+const MAX_DIST = 90, MIN_DIST = 10, FRICTION = 0.92, FORCE = 0.3;
+
+function step() {
+  for (let i = 0; i < particles.length; i++) {
+    let fx = 0, fy = 0;
+    const pi = particles[i];
+    for (let j = 0; j < particles.length; j++) {
+      if (i === j) continue;
+      const pj = particles[j];
+      let dx = pj.x - pi.x, dy = pj.y - pi.y;
+      // wrap
+      if (dx > W/2) dx -= W; if (dx < -W/2) dx += W;
+      if (dy > H/2) dy -= H; if (dy < -H/2) dy += H;
+      const d = Math.sqrt(dx*dx + dy*dy) + 0.001;
+      if (d < MIN_DIST) {
+        const f = -1.2 * (MIN_DIST - d) / MIN_DIST;
+        fx += dx/d*f; fy += dy/d*f;
+      } else if (d < MAX_DIST) {
+        const a = att[TYPES[pi.type]][TYPES[pj.type]];
+        const f = a * (1 - d / MAX_DIST);
+        fx += dx/d*f; fy += dy/d*f;
+      }
+    }
+    pi.vx = (pi.vx + fx * FORCE) * FRICTION;
+    pi.vy = (pi.vy + fy * FORCE) * FRICTION;
+    const spd = Math.sqrt(pi.vx**2 + pi.vy**2);
+    if (spd > 3) { pi.vx = pi.vx/spd*3; pi.vy = pi.vy/spd*3; }
+    pi.x = ((pi.x + pi.vx) % W + W) % W;
+    pi.y = ((pi.y + pi.vy) % H + H) % H;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  for (const p of particles) {
+    const col = COLORS[p.type];
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = col;
+    ctx.fill();
+    // glow
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 4);
+    g.addColorStop(0, col + '44');
+    g.addColorStop(1, col + '00');
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r * 4, 0, Math.PI * 2);
+    ctx.fillStyle = g;
+    ctx.fill();
+  }
+}
+
+let last = 0;
+function loop(ts) {
+  if (ts - last > 16) { step(); draw(); last = ts; }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+// ── Randomize attraction periodically ──────────────────────────
+setInterval(() => {
+  const t1 = TYPES[Math.floor(Math.random()*5)];
+  const t2 = TYPES[Math.floor(Math.random()*5)];
+  att[t1][t2] = (Math.random()*2-1)*0.8;
+}, 2500);
+
+// ── Nav scroll ─────────────────────────────────────────────────
+window.addEventListener('scroll', () => {
+  document.getElementById('nav').classList.toggle('scrolled', window.scrollY > 60);
+});
+
+// ── Scroll reveal ───────────────────────────────────────────────
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); } });
+}, { threshold: 0.1 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ── Attraction matrix visual ─────────────────────────────────────
+const PARTICLE_COLORS = ['#e63c3c','#3cd250','#3c82e6','#e6d228','#b43cdc'];
+const PARTICLE_NAMES  = ['Red','Grn','Blu','Ylw','Prp'];
+
+function buildMatrix() {
+  const container = document.getElementById('matrixVis');
+  container.innerHTML = '';
+  container.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;';
+
+  // Header row (col labels)
+  const header = document.createElement('div');
+  header.style.cssText = 'display:grid;grid-template-columns:28px repeat(5,1fr);gap:4px;margin-bottom:4px;';
+  header.innerHTML = '<div></div>';
+  PARTICLE_NAMES.forEach((n,i) => {
+    const d = document.createElement('div');
+    d.style.cssText = `font-size:0.55rem;color:${PARTICLE_COLORS[i]};text-align:center;letter-spacing:0.04em;font-family:Space Mono,monospace;`;
+    d.textContent = n;
+    header.appendChild(d);
+  });
+  container.appendChild(header);
+
+  // Matrix rows
+  const matrix = [];
+  for (let r=0;r<5;r++) {
+    matrix.push([]);
+    const row = document.createElement('div');
+    row.style.cssText = 'display:grid;grid-template-columns:28px repeat(5,1fr);gap:4px;margin-bottom:4px;';
+    const rowLabel = document.createElement('div');
+    rowLabel.style.cssText = `font-size:0.55rem;color:${PARTICLE_COLORS[r]};display:flex;align-items:center;justify-content:center;letter-spacing:0.04em;font-family:Space Mono,monospace;`;
+    rowLabel.textContent = PARTICLE_NAMES[r];
+    row.appendChild(rowLabel);
+    for (let c=0;c<5;c++) {
+      const val = (Math.random()*2-1);
+      matrix[r].push(val);
+      const cell = document.createElement('div');
+      const frac = (val+1)/2;
+      const r_  = Math.round(200*(1-frac));
+      const g_  = Math.round(200*frac);
+      cell.style.cssText = `aspect-ratio:1;border-radius:4px;background:rgb(${r_},${g_},70);display:flex;align-items:center;justify-content:center;font-size:0.5rem;font-weight:700;color:#000;font-family:Space Mono,monospace;cursor:default;transition:transform 0.15s;`;
+      cell.textContent = (val>0?'+':'')+val.toFixed(1);
+      cell.addEventListener('mouseenter',()=>cell.style.transform='scale(1.2)');
+      cell.addEventListener('mouseleave',()=>cell.style.transform='scale(1)');
+      row.appendChild(cell);
+    }
+    container.appendChild(row);
+  }
+
+  const lbl = document.createElement('div');
+  lbl.style.cssText = 'font-size:0.58rem;color:var(--text-dim);text-align:center;letter-spacing:0.1em;text-transform:uppercase;margin-top:12px;font-family:Space Mono,monospace;';
+  lbl.textContent = 'Row species → Col species force';
+  container.appendChild(lbl);
+}
+buildMatrix();
+// Regenerate matrix every 4s for demo
+setInterval(buildMatrix, 4000);
+</script>
+</body>
+</html>
